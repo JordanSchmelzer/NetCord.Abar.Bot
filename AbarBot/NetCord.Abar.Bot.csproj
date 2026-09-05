@@ -1,0 +1,42 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UserSecretsId>0139339b-f89d-4cc4-a3bf-a9675e886cdf</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Database\abar_bot.db" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Database\abar_bot.db">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+	<Content Include="Sounds\**\*">
+		<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	</Content>
+  </ItemGroup>
+	
+  <ItemGroup>
+    <PackageReference Include="libsodium" Version="1.0.22" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="11.0.0-preview.7.26381.103" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0-preview.7.26381.103" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="11.0.0-preview.7.26381.103" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="11.0.0-preview.7.26381.103" />
+    <PackageReference Include="NetCord" Version="1.0.0-beta.18" />
+    <PackageReference Include="NetCord.Hosting" Version="1.0.0-beta.18" />
+    <PackageReference Include="NetCord.Hosting.AspNetCore" Version="1.0.0-beta.18" />
+    <PackageReference Include="NetCord.Hosting.Services" Version="1.0.0-beta.18" />
+    <PackageReference Include="OpusDotNet.opus.win-x64" Version="1.3.1" />
+  </ItemGroup>
+
+</Project>
