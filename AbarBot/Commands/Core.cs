@@ -1,13 +1,16 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using NetCord;
-using NetCord.Abar.Bot.Database.Models;
-using NetCord.Gateway.Voice;
-using NetCord.Logging;
-using NetCord.Rest;
-using NetCord.Services.ApplicationCommands;
+
 using System.Collections.Concurrent;
 using System.Diagnostics;
 
+using NetCord.Abar.Bot.Database.Models;
+using NetCord.Abar.Bot.Services.Interfaces;
+using NetCord.Gateway.Voice;
+using NetCord.Rest;
+using NetCord.Services.ApplicationCommands;
+using NetCord.Abar.Bot.Services;
+
+using NetCord.Abar.Bot.Models;
 
 namespace NetCord.Abar.Bot.Commands;
 
@@ -16,22 +19,13 @@ public class AbarCore : ApplicationCommandModule<ApplicationCommandContext>
 {
     private static readonly ConcurrentDictionary<ulong, VoiceInstance?> voiceInstances = new();
     private readonly SoundDbContext _db;
+    private readonly IVoiceService _voiceService;
 
-
-    public AbarCore(SoundDbContext db)
+    public AbarCore(SoundDbContext db, VoiceService voiceService)
     {
         _db = db;
-    }
-
-
-    static T CreateMessage<T>() where T : IMessageProperties, new()
-    {
-        return new()
-        {
-            Content = "Hello, World!",
-            Components = [],
-        };
-    }
+        _voiceService = voiceService;
+    }    
 
 
     [SlashCommand("soundlist", "List all app sounds")]
@@ -78,156 +72,19 @@ public class AbarCore : ApplicationCommandModule<ApplicationCommandContext>
     }
 
 
-    [SlashCommand("ping", "Ping!")]
-    public static string Ping() => "Pong!";
-
-
     [SlashCommand("join", "Joins the user's voice channel or a specified one")]
     public async Task<InteractionMessageProperties> JoinVoiceAsync(IVoiceGuildChannel? channel = null)
     {
-        var ctx = Context;
-        // Ensure guild exists
-        if (ctx.Guild is not { } guild)
-        {
-            return new InteractionMessageProperties()
-                .WithContent("The guild is not available. Try again later.")
-                .WithFlags(MessageFlags.Ephemeral);
-        }
-
-        var user = ctx.User;
-
-        // Determine channel ID
-        ulong channelId;
-        if (channel is not null)
-        {
-            channelId = channel.Id;
-        }
-        else if (guild.VoiceStates.TryGetValue(user.Id, out var voiceState))
-        {
-            channelId = voiceState.ChannelId.GetValueOrDefault();
-        }
-        else
-        {
-            return new InteractionMessageProperties()
-                .WithContent("You must specify a channel or be connected to a voice channel.")
-                .WithFlags(MessageFlags.Ephemeral);
-        }
-
-        var guildId = guild.Id;
-
-        // Prevent multiple connections in same guild
-        if (!voiceInstances.TryAdd(guildId, null))
-        {
-            return new InteractionMessageProperties()
-                .WithContent("Already connected to a voice channel in this guild.")
-                .WithFlags(MessageFlags.Ephemeral);
-        }
-
-        VoiceClient? voiceClient;
-
-        try
-        {
-            voiceClient = await ctx.Client.JoinVoiceChannelAsync(
-                guildId,
-                channelId,
-                new VoiceClientConfiguration
-                {
-                    Logger = new ConsoleLogger(),
-                });
-        }
-        catch
-        {
-            voiceInstances.TryRemove(new(guildId, null));
-            await ctx.Client.UpdateVoiceStateAsync(new(guildId, null));
-            throw;
-        }
-
-        // Wrap in VoiceInstance
-        VoiceInstance voiceInstance = new(voiceClient);
-
-        if (!voiceInstances.TryUpdate(guildId, voiceInstance, null))
-        {
-            // Should never happen, but safe cleanup
-            voiceInstance.Dispose();
-            await ctx.Client.UpdateVoiceStateAsync(new(guildId, null));
-
-            return new InteractionMessageProperties()
-                .WithContent("Failed to register voice connection.")
-                .WithFlags(MessageFlags.Ephemeral);
-        }
-
-        // Disconnect handler
-        voiceClient.Disconnect += args =>
-        {
-            if (args.Reconnect)
-                return default;
-
-            if (voiceInstances.TryRemove(new(guildId, voiceInstance)))
-                voiceInstance.Dispose();
-
-            return default;
-        };
-
-        try
-        {
-            await voiceClient.StartAsync();
-        }
-        catch
-        {
-            if (voiceInstances.TryRemove(new(guildId, voiceInstance)))
-            {
-                voiceInstance.Dispose();
-                await ctx.Client.UpdateVoiceStateAsync(new(guildId, null));
-            }
-
-            throw;
-        }
-
-        return "Joined voice channel.";
+        InteractionMessageProperties resp = await _voiceService.JoinAsync(Context, channel);
+        return resp;
     }
 
 
     [SlashCommand("leave", "Leaves the current voice channel")]
     public async Task<InteractionMessageProperties> LeaveVoiceAsync()
     {
-        var ctx = Context;
-
-        if (ctx.Guild is not { } guild)
-        {
-            return new InteractionMessageProperties()
-                .WithContent("The guild is not available. Try again later.")
-                .WithFlags(MessageFlags.Ephemeral);
-        }
-
-        var guildId = guild.Id;
-
-        // Check if we have a voice instance for this guild
-        if (!voiceInstances.TryGetValue(guildId, out var voiceInstance) || voiceInstance is null)
-        {
-            return new InteractionMessageProperties()
-                .WithContent("Not connected to a voice channel in this guild.")
-                .WithFlags(MessageFlags.Ephemeral);
-        }
-
-        // Remove instance from dictionary
-        if (voiceInstances.TryRemove(new(guildId, voiceInstance)))
-        {
-            // Dispose the instance (this disposes the VoiceClient)
-            voiceInstance.Dispose();
-
-            // Tell Discord we are leaving voice
-            await ctx.Client.UpdateVoiceStateAsync(new(guildId, null));
-
-            return "Left the voice channel.";
-        }
-
-        // If removal failed (rare), still attempt cleanup
-        voiceInstance.Dispose();
-        await ctx.Client.UpdateVoiceStateAsync(new(guildId, null));
-
-        return new InteractionMessageProperties()
-            .WithContent("Failed to unregister voice connection, but disconnected anyway.")
-            .WithFlags(MessageFlags.Ephemeral);
+        InteractionMessageProperties resp = await _voiceService.LeaveAsync(Context);
+        return resp;
     }
 
 

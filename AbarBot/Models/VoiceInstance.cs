@@ -1,6 +1,8 @@
 ﻿using NetCord.Gateway.Voice;
 
-internal sealed class VoiceInstance(VoiceClient client) : IDisposable
+namespace NetCord.Abar.Bot.Models;
+
+public sealed class VoiceInstance(VoiceClient client) : IDisposable
 {
     private static readonly int JobTypeCount = Enum.GetValues<VoiceJobType>().Length;
 
@@ -26,8 +28,8 @@ internal sealed class VoiceInstance(VoiceClient client) : IDisposable
     }
 
     public readonly record struct Job(VoiceInstance Instance,
-                                      VoiceJobType JobType,
-                                      CancellationToken CancellationToken) : IDisposable
+        VoiceJobType JobType,
+        CancellationToken CancellationToken) : IDisposable
     {
         public void Dispose()
         {
@@ -36,7 +38,7 @@ internal sealed class VoiceInstance(VoiceClient client) : IDisposable
     }
 }
 
-internal enum VoiceJobType
+public enum VoiceJobType
 {
     Playing = 0,
     Recording = 1,

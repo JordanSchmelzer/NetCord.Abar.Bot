@@ -1,13 +1,17 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using NetCord.Abar.Bot.Commands;
-using NetCord.Abar.Bot.Database;
 using NetCord.Gateway;
 using NetCord.Hosting.Gateway;
 using NetCord.Hosting.Services;
 using NetCord.Hosting.Services.ApplicationCommands;
+
 using Microsoft.EntityFrameworkCore;
+
+using NetCord.Abar.Bot.Commands;
+using NetCord.Abar.Bot.Database;
+using NetCord.Abar.Bot.Services;
+using NetCord.Abar.Bot.Services.Interfaces;
 
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
@@ -52,7 +56,8 @@ builder.Services.AddDiscordGateway(options =>
         throw new InvalidOperationException(noDbConnStrMessage);
     }
     options.UseSqlite(connStr);
-});
+})
+.AddSingleton<IVoiceService, VoiceService>();
 
 DbUtil.InitializeDatabase(connStr);
 
