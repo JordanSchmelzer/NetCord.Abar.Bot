@@ -1,21 +1,29 @@
-﻿using System.Collections.Concurrent;
-
+﻿using Lavalink4NET;
+using Lavalink4NET.Players;
+using Lavalink4NET.Players.Queued;
+using NetCord.Abar.Bot.Models;
+using NetCord.Abar.Bot.Services.Interfaces;
 using NetCord.Gateway.Voice;
 using NetCord.Logging;
 using NetCord.Rest;
 using NetCord.Services.ApplicationCommands;
-
-using NetCord.Abar.Bot.Services.Interfaces;
-
-using NetCord.Abar.Bot.Models;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 
 namespace NetCord.Abar.Bot.Services;
 
 
-public class VoiceService : IVoiceService
+public class VoiceService: IVoiceService
 {
+    private readonly IAudioService _audioService;
+    public VoiceService(IAudioService audioService)
+    {
+        _audioService = audioService;
+    }
+
     // Dictionary to hold voice instances per guild
     private static readonly ConcurrentDictionary<ulong, VoiceInstance?> _voiceInstance = new();
+    //private readonly IAudioService _audioService;
 
     // Join a voice channel
     public async Task<InteractionMessageProperties> JoinAsync(
@@ -266,4 +274,31 @@ public class VoiceService : IVoiceService
                 throw;
         }
     }
+
+
+    public async Task StopAsync(ApplicationCommandContext ctx)
+    {
+        if (ctx.Guild is not { } guild)
+        {
+            await ctx.Interaction.SendResponseAsync(InteractionCallback.Message(new InteractionMessageProperties()
+                .WithContent("The guild is not available. Try again later.")
+                .WithFlags(MessageFlags.Ephemeral)));
+            return;
+        }
+
+        var guildId = guild.Id;
+
+        if (!_voiceInstance.TryGetValue(guildId, out var voiceInstance) || voiceInstance is null)
+        {
+            await ctx.Interaction.SendResponseAsync(InteractionCallback.Message(new InteractionMessageProperties()
+                .WithContent("Not connected to a voice channel in this guild.")
+                .WithFlags(MessageFlags.Ephemeral)));
+            return;
+        }
+
+        await ctx.Interaction.SendResponseAsync(InteractionCallback.Message($"Stopping..."));
+        voiceInstance.Dispose();
+        _voiceInstance.TryRemove(guildId, out _);
+    }
+
 }

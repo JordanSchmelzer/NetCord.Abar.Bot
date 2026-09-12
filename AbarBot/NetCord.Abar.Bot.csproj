@@ -25,6 +25,9 @@
   </ItemGroup>
 	
   <ItemGroup>
+    <PackageReference Include="Lavalink4NET" Version="4.2.2" />
+    <PackageReference Include="Lavalink4NET.InactivityTracking" Version="4.2.2" />
+    <PackageReference Include="Lavalink4NET.NetCord" Version="4.2.2" />
     <PackageReference Include="libsodium" Version="1.0.22" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="11.0.0-preview.7.26381.103" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
