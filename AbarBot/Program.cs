@@ -94,7 +94,7 @@ builder.Services.AddDiscordGateway(options =>
     //config.ExcludeBots = true;
 })
 .AddApplicationCommands()
-.AddDbContext<SoundDbContext>(options =>
+.AddDbContext<SoundDbContext>(options => 
 {
     if (string.IsNullOrWhiteSpace(connStr))
     {
@@ -107,6 +107,6 @@ builder.Services.AddDiscordGateway(options =>
 .AddSingleton<IVoiceService, VoiceService>();
 
 IHost host = builder.Build()
-    .AddModules(typeof(AbarCore).Assembly);
+    .AddModules(typeof(Program).Assembly);
 
 await host.RunAsync();
