@@ -8,7 +8,6 @@ using NetCord.Hosting.Services.ApplicationCommands;
 
 using Microsoft.EntityFrameworkCore;
 
-using NetCord.Abar.Bot.Commands;
 using NetCord.Abar.Bot.Database;
 using NetCord.Abar.Bot.Services;
 using NetCord.Abar.Bot.Services.Interfaces;
@@ -93,6 +92,9 @@ builder.Services.AddDiscordGateway(options =>
     // specify if bots should be excluded from the user count. The default is true.
     //config.ExcludeBots = true;
 })
+.AddSingleton<ITrackSearchService>(sp => new TrackSearchService(
+    soundRoot: @"C:/Users/jorda/source/repos/NetCord.Abar.Bot/AbarBot/Sounds"
+))
 .AddApplicationCommands()
 .AddDbContext<SoundDbContext>(options => 
 {

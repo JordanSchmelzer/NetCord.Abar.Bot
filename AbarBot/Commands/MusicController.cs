@@ -4,37 +4,26 @@ using Lavalink4NET.NetCord;
 using Lavalink4NET.Players;
 using Lavalink4NET.Players.Preconditions;
 using Lavalink4NET.Players.Queued;
-using Lavalink4NET.Rest.Entities.Tracks;
 
-using Microsoft.EntityFrameworkCore;
-using NetCord.Abar.Bot.Database.Models;
 using NetCord.Abar.Bot.Services.Interfaces;
 using NetCord.Rest;
 using NetCord.Services.ApplicationCommands;
 using System.Collections.Immutable;
-using System.Runtime.CompilerServices;
-
-using NetCord.Abar.Bot;
 
 namespace NetCord.Abar.Bot.Commands;
 
 
 public class MusicController: ApplicationCommandModule<ApplicationCommandContext>
 {
-    private readonly SoundDbContext _db;
-    private readonly IVoiceService _voiceService;
     private readonly IAudioService _audioService;
-
-    private static readonly string SoundsRoot = @"C:/Users/jorda/source/repos/NetCord.Abar.Bot/AbarBot/Sounds";
+    private readonly ITrackSearchService _trackSearchService;
 
     public MusicController(
-        SoundDbContext db, 
-        IVoiceService voiceService, 
-        IAudioService audioService)
+        IAudioService audioService,
+        ITrackSearchService trackSearchService)
     {
-        _db = db;
-        _voiceService = voiceService;
         _audioService = audioService;
+        _trackSearchService = trackSearchService;
     }
 
 
@@ -135,78 +124,6 @@ public class MusicController: ApplicationCommandModule<ApplicationCommandContext
         return;
     }
 
-    private static IEnumerable<string> GetAudioFiles(string folder)
-    {
-        return Directory.GetFiles(folder, "*.*", SearchOption.TopDirectoryOnly)
-            .Where(f => f.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase)
-                     || f.EndsWith(".wav", StringComparison.OrdinalIgnoreCase)
-                     || f.EndsWith(".flac", StringComparison.OrdinalIgnoreCase));
-    }
-
-
-    private static int LevenshteinDistance(string a, string b)
-    {
-        int[,] dp = new int[a.Length + 1, b.Length + 1];
-
-        for (int i = 0; i <= a.Length; i++)
-            dp[i, 0] = i;
-
-        for (int j = 0; j <= b.Length; j++)
-            dp[0, j] = j;
-
-        for (int i = 1; i <= a.Length; i++)
-        {
-            for (int j = 1; j <= b.Length; j++)
-            {
-                int cost = a[i - 1] == b[j - 1] ? 0 : 1;
-
-                dp[i, j] = Math.Min(
-                    Math.Min(dp[i - 1, j] + 1, dp[i, j - 1] + 1),
-                    dp[i - 1, j - 1] + cost
-                );
-            }
-        }
-
-        return dp[a.Length, b.Length];
-    }
-
-
-    private static string? FindBestMatchingFile(List<string> files, string query)
-    {
-        query = query.ToLowerInvariant();
-
-        // Extract just the filename without extension
-        var candidates = files.Select(f => new
-        {
-            Path = f,
-            Name = Path.GetFileNameWithoutExtension(f).ToLowerInvariant()
-        }).ToList();
-
-        // 1. Exact match
-        var exact = candidates.FirstOrDefault(c => c.Name == query);
-        if (exact != null)
-            return exact.Path;
-
-        // 2. Starts-with match
-        var starts = candidates.FirstOrDefault(c => c.Name.StartsWith(query));
-        if (starts != null)
-            return starts.Path;
-
-        // 3. Contains match
-        var contains = candidates.FirstOrDefault(c => c.Name.Contains(query));
-        if (contains != null)
-            return contains.Path;
-
-        // 4. Levenshtein fuzzy match
-        var best = candidates
-            .Select(c => new { c.Path, Score = LevenshteinDistance(c.Name, query) })
-            .OrderBy(c => c.Score)
-            .FirstOrDefault();
-
-        // Accept fuzzy match only if reasonably close
-        return best?.Score < 5 ? best.Path : null;
-    }
-
 
     [SlashCommand("playrandom", "Plays (and queues) a random track.")]
     public async Task PlayRandomAsync()
@@ -221,7 +138,7 @@ public class MusicController: ApplicationCommandModule<ApplicationCommandContext
         if (player is null)
             return;
 
-        var files = GetAudioFiles(SoundsRoot)
+        var files = _trackSearchService.GetAudioFiles()
             .ToList();
 
         if (files.Count == 0)
@@ -275,7 +192,7 @@ public class MusicController: ApplicationCommandModule<ApplicationCommandContext
             return;
 
         // Get tracks
-        var tracks = GetAudioFiles(SoundsRoot).ToList();
+        var tracks = _trackSearchService.GetAudioFiles().ToList();
         if (tracks.Count == 0)
         {
             await Context.Interaction.SendFollowupMessageAsync(new()
@@ -287,7 +204,7 @@ public class MusicController: ApplicationCommandModule<ApplicationCommandContext
         }
 
         // Find best match
-        var bestMatch = FindBestMatchingFile(tracks, query);
+        var bestMatch = _trackSearchService.FindBestMatchingFile(tracks, query);
 
         if (bestMatch is null)
         {
@@ -299,15 +216,11 @@ public class MusicController: ApplicationCommandModule<ApplicationCommandContext
             return;
         }
 
-        var audioFileInfo = new FileInfo(SoundsRoot + "/" + bestMatch);
-        if (!audioFileInfo.Exists)
-        {
-            return;
-        }
+        var track = new FileInfo(bestMatch);
 
         // Play the track and inform the user about the track that is being played.
         await player.PlayFileAsync(
-            fileInfo: audioFileInfo,
+            fileInfo: track,
             enqueue: true,
             properties: default,
             cancellationToken: default
@@ -320,7 +233,7 @@ public class MusicController: ApplicationCommandModule<ApplicationCommandContext
     {
         await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage());
 
-        var files = GetAudioFiles(SoundsRoot).ToList();
+        var files = _trackSearchService.GetAudioFiles().ToList();
 
         var matches = files
             .Where(f => Path.GetFileNameWithoutExtension(f)
