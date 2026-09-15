@@ -12,19 +12,23 @@ using NetCord.Abar.Bot.Database;
 using NetCord.Abar.Bot.Services;
 using NetCord.Abar.Bot.Services.Interfaces;
 
-//using Lavalink4NET.NetCord;
 using Lavalink4NET.Extensions;
 using Lavalink4NET.NetCord;
 using Lavalink4NET.InactivityTracking.Trackers.Idle;
 using Lavalink4NET.InactivityTracking.Trackers.Users;
 
+var config = new ConfigurationManager();
 
-HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
+config
+    .SetBasePath(Directory.GetCurrentDirectory())
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    .AddUserSecrets<Program>(optional: true)
+    .AddEnvironmentVariables();
 
-
-// Ensure user secrets are available regardless of environment
-builder.Configuration.AddUserSecrets<Program>(optional: true);
-
+var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+{
+    Configuration = config
+});
 
 // reads appsettings, env vars, user-secrets, CLI
 string? token = builder.Configuration["Discord:Token"];
@@ -33,6 +37,12 @@ if (string.IsNullOrWhiteSpace(token))
     string noDiscordTokenMessage = "Discord token not found in configuration. " +
         "Set it in user secrets, environment variables, or command-line args.";
     throw new InvalidOperationException(noDiscordTokenMessage);
+}
+
+string? soundsDir = builder.Configuration["SoundsDirectory"];
+if (string.IsNullOrWhiteSpace(soundsDir))
+{
+    throw new InvalidOperationException("sounds directory cannot be null");
 }
 
 // Database connection string goes here.
@@ -96,7 +106,7 @@ builder.Services.AddDiscordGateway(options =>
     soundRoot: @"C:/Users/jorda/source/repos/NetCord.Abar.Bot/AbarBot/Sounds"
 ))
 .AddApplicationCommands()
-.AddDbContext<SoundDbContext>(options => 
+.AddDbContext<AbarBotDbContext>(options => 
 {
     if (string.IsNullOrWhiteSpace(connStr))
     {

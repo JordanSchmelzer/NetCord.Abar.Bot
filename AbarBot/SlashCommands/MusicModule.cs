@@ -10,20 +10,24 @@ using NetCord.Rest;
 using NetCord.Services.ApplicationCommands;
 using System.Collections.Immutable;
 
-namespace NetCord.Abar.Bot.Commands;
+
+namespace NetCord.Abar.Bot.SlashCommands;
 
 
-public class MusicController: ApplicationCommandModule<ApplicationCommandContext>
+public class MusicModule: ApplicationCommandModule<ApplicationCommandContext>
 {
+    private readonly AbarBotDbContext _soundDb;
     private readonly IAudioService _audioService;
     private readonly ITrackSearchService _trackSearchService;
 
-    public MusicController(
+    public MusicModule(
         IAudioService audioService,
-        ITrackSearchService trackSearchService)
+        ITrackSearchService trackSearchService,
+        AbarBotDbContext soundDb)
     {
         _audioService = audioService;
         _trackSearchService = trackSearchService;
+        _soundDb = soundDb;
     }
 
 

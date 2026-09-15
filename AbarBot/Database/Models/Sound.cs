@@ -1,14 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿namespace NetCord.Abar.Bot.Database.Models;
 
-
-namespace NetCord.Abar.Bot.Database.Models
+public class Sound
 {
-    public class Sound
-    {
-        public int Id { get; set; }
-        public string SearchTerm { get; set; }
-        public string? ResourcePath { get; set; }
-    }
+    public int Id { get; set; }
+    public string FileName { get; set; } = null!;
+    public bool IsDeleted { get; set; }
+
+    // Relationships
+    // Optional: link sounds to playlists
+    public int? PlaylistId { get; set; }
+    public Playlist? Playlist { get; set; }
 }
