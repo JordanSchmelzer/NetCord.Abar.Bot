@@ -1,4 +1,4 @@
-﻿namespace NetCord.Abar.Bot.Database.Models;
+﻿namespace NetCord.Abar.Bot.Models;
 
 
 public class User

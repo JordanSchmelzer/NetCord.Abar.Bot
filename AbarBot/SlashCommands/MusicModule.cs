@@ -6,9 +6,12 @@ using Lavalink4NET.Players.Preconditions;
 using Lavalink4NET.Players.Queued;
 
 using NetCord.Abar.Bot.Services.Interfaces;
+using NetCord.Abar.Bot.Models;
+
 using NetCord.Rest;
 using NetCord.Services.ApplicationCommands;
 using System.Collections.Immutable;
+using Microsoft.EntityFrameworkCore;
 
 
 namespace NetCord.Abar.Bot.SlashCommands;
@@ -16,9 +19,9 @@ namespace NetCord.Abar.Bot.SlashCommands;
 
 public class MusicModule: ApplicationCommandModule<ApplicationCommandContext>
 {
-    private readonly AbarBotDbContext _soundDb;
     private readonly IAudioService _audioService;
     private readonly ITrackSearchService _trackSearchService;
+    private readonly AbarBotDbContext _db;
 
     public MusicModule(
         IAudioService audioService,
@@ -27,7 +30,37 @@ public class MusicModule: ApplicationCommandModule<ApplicationCommandContext>
     {
         _audioService = audioService;
         _trackSearchService = trackSearchService;
-        _soundDb = soundDb;
+        _db = soundDb;
+
+    }
+
+
+    // NOTE: Could use a middleware pattern instead, but that would mean creating a custom module.
+    // This is a low effort way to get the same effect. Pros and cons to both strategy.
+    private async Task EnsureUserAsync(ulong discordUserId, string discordUserName)
+    {
+        int userId = (int)discordUserId;
+
+        var existingUser = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId);
+
+        if (existingUser != null)
+        {
+            // Update the user's name if it has changed
+            existingUser.Name = discordUserName;
+
+            await _db.SaveChangesAsync();
+            return;
+        }
+
+        await _db.Users.AddAsync(new Models.User
+        {
+            Id = userId,
+            Name = discordUserName,
+            CreatedAt = DateTime.UtcNow,
+            LastModifiedAt = DateTime.UtcNow
+        });
+
+        await _db.SaveChangesAsync();
     }
 
 
@@ -132,7 +165,9 @@ public class MusicModule: ApplicationCommandModule<ApplicationCommandContext>
     [SlashCommand("playrandom", "Plays (and queues) a random track.")]
     public async Task PlayRandomAsync()
     {
-        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage());
+        // Defer the response to give more time for processing
+        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
+        await EnsureUserAsync(Context.Interaction.User.Id, Context.Interaction.User.Username);
 
         var player = await TryGetPlayerAsync(
             allowConnect: true,
@@ -176,8 +211,9 @@ public class MusicModule: ApplicationCommandModule<ApplicationCommandContext>
     [SlashCommand("play", "play from lavalink")]
     public async Task PlayAsync(string query)
     {
-        // Immediately tell Discord to wait (Stops did not respond err if takes too long)
-        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage());
+        // Defer the response to give more time for processing
+        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
+        await EnsureUserAsync(Context.Interaction.User.Id, Context.Interaction.User.Username);
 
         // Retrieve the player using the method we created earlier.
         // We allow to connect to the voice channel if the user is not connected.
@@ -235,7 +271,9 @@ public class MusicModule: ApplicationCommandModule<ApplicationCommandContext>
     [SlashCommand("search", "Searches your Sounds folder for matching audio files")]
     public async Task SearchAsync(string query)
     {
-        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage());
+        // Defer the response to give more time for processing
+        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
+        await EnsureUserAsync(Context.Interaction.User.Id, Context.Interaction.User.Username);
 
         var files = _trackSearchService.GetAudioFiles().ToList();
 
@@ -268,8 +306,9 @@ public class MusicModule: ApplicationCommandModule<ApplicationCommandContext>
     [SlashCommand("stop", "stop the current playing audio in this channel")]
     public async Task StopAsync()
     {
-        // Immediately tell Discord to wait (Stops did not respond err if takes too long)
-        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage());
+        // Defer the response to give more time for processing
+        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
+        await EnsureUserAsync(Context.Interaction.User.Id, Context.Interaction.User.Username);
 
         // Retrieve the player using the method we created earlier.
         // We do not allow to connect to the voice channel if the user is not connected.
@@ -298,8 +337,9 @@ public class MusicModule: ApplicationCommandModule<ApplicationCommandContext>
     [SlashCommand("pause", "pauses the current playing audio track")]
     public async Task PauseAsync()
     {
-        // Acknowledge the interaction immediately
-        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage());
+        // Defer the response to give more time for processing
+        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
+        await EnsureUserAsync(Context.Interaction.User.Id, Context.Interaction.User.Username);
 
         var player = await TryGetPlayerAsync(
             allowConnect: false,
@@ -327,8 +367,9 @@ public class MusicModule: ApplicationCommandModule<ApplicationCommandContext>
     [SlashCommand("resume", "resumes the paused audio track if any")]
     public async Task ResumeAsync()
     {
-        // Acknowledge the interaction immediately
-        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage());
+        // Defer the response to give more time for processing
+        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
+        await EnsureUserAsync(Context.Interaction.User.Id, Context.Interaction.User.Username);
 
         var player = await TryGetPlayerAsync(
             allowConnect: false,
@@ -357,8 +398,9 @@ public class MusicModule: ApplicationCommandModule<ApplicationCommandContext>
         [SlashCommandParameter(Description = "The volume level from 0 to 1000%")]
         int volume = 100)
     {
-        // Immediately tell Discord to wait (Stops did not respond err if takes too long)
-        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage());
+        // Defer the response to give more time for processing
+        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
+        await EnsureUserAsync(Context.Interaction.User.Id, Context.Interaction.User.Username);
 
         // Must be withing supported range
         if (volume is > 1000 or < 0)
@@ -393,8 +435,9 @@ public class MusicModule: ApplicationCommandModule<ApplicationCommandContext>
     [SlashCommand("position", "Shows the track position")]
     public async Task PositionAsync()
     {
-        // Acknowledge the interaction immediately
-        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage());
+        // Defer the response to give more time for processing
+        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
+        await EnsureUserAsync(Context.Interaction.User.Id, Context.Interaction.User.Username);
 
         var player = await TryGetPlayerAsync(
             allowConnect: false,
@@ -431,8 +474,9 @@ public class MusicModule: ApplicationCommandModule<ApplicationCommandContext>
     [SlashCommand("skip", "Skips the current track")]
     public async Task Skip()
     {
-        // Acknowledge the interaction immediately
-        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage());
+        // Defer the response to give more time for processing
+        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
+        await EnsureUserAsync(Context.Interaction.User.Id, Context.Interaction.User.Username);
 
         var player = await TryGetPlayerAsync(
             allowConnect: false,
@@ -487,8 +531,9 @@ public class MusicModule: ApplicationCommandModule<ApplicationCommandContext>
         [SlashCommandParameter(Description = "'on' or 'off'. Set to On to play a random track in queue.")]
         string mode)
     {
-        // Acknowledge the interaction immediately
-        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage());
+        // Defer the response to give more time for processing
+        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
+        await EnsureUserAsync(Context.Interaction.User.Id, Context.Interaction.User.Username);
 
         var player = await TryGetPlayerAsync(
             allowConnect: false,
