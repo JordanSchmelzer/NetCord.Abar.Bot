@@ -1,21 +1,20 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Lavalink4NET.Extensions;
+using Lavalink4NET.InactivityTracking.Trackers.Idle;
+using Lavalink4NET.InactivityTracking.Trackers.Users;
+using Lavalink4NET.NetCord;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using NetCord;
+using NetCord.Abar.Bot.Services;
+using NetCord.Abar.Bot.Services.Interfaces;
 using NetCord.Gateway;
 using NetCord.Hosting.Gateway;
 using NetCord.Hosting.Services;
 using NetCord.Hosting.Services.ApplicationCommands;
-
-using Microsoft.EntityFrameworkCore;
-
-using NetCord.Abar.Bot.Database;
-using NetCord.Abar.Bot.Services;
-using NetCord.Abar.Bot.Services.Interfaces;
-
-using Lavalink4NET.Extensions;
-using Lavalink4NET.NetCord;
-using Lavalink4NET.InactivityTracking.Trackers.Idle;
-using Lavalink4NET.InactivityTracking.Trackers.Users;
+using NetCord.Hosting.Services.ComponentInteractions;
+using NetCord.Services.ComponentInteractions;
 
 var config = new ConfigurationManager();
 
@@ -29,6 +28,24 @@ var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
 {
     Configuration = config
 });
+
+string? abarConnStr = builder.Configuration.GetConnectionString("AbarBot");
+if (string.IsNullOrWhiteSpace(abarConnStr))
+{
+    string noDbConnStrMessage = "Database connection string not found in configuration. " +
+        "Set it in user secrets, environment variables, or command-line args.";
+    throw new InvalidOperationException(noDbConnStrMessage);
+}
+
+builder.Services
+    .AddDiscordGateway()
+    .AddComponentInteractions<ButtonInteraction, ButtonInteractionContext>()
+    .AddComponentInteractions<StringMenuInteraction, StringMenuInteractionContext>()
+    .AddComponentInteractions<UserMenuInteraction, UserMenuInteractionContext>()
+    .AddComponentInteractions<RoleMenuInteraction, RoleMenuInteractionContext>()
+    .AddComponentInteractions<MentionableMenuInteraction, MentionableMenuInteractionContext>()
+    .AddComponentInteractions<ChannelMenuInteraction, ChannelMenuInteractionContext>()
+    .AddComponentInteractions<ModalInteraction, ModalInteractionContext>();
 
 // reads appsettings, env vars, user-secrets, CLI
 string? token = builder.Configuration["Discord:Token"];
@@ -46,10 +63,6 @@ if (string.IsNullOrWhiteSpace(soundsDir))
 }
 
 // Database connection string goes here.
-string dbPath = Path.Combine("Database", "abar_bot.db");
-string connStr = $"Data Source={dbPath}";
-DbUtil.InitializeDatabase(connStr);
-
 builder.Services.AddDiscordGateway(options =>
 {
     options.Token = token; // Sets the token from config
@@ -108,17 +121,13 @@ builder.Services.AddDiscordGateway(options =>
 .AddApplicationCommands()
 .AddDbContext<AbarBotDbContext>(options => 
 {
-    if (string.IsNullOrWhiteSpace(connStr))
-    {
-        string noDbConnStrMessage = "Database connection string not found in configuration. " +
-            "Set it in user secrets, environment variables, or command-line args.";
-        throw new InvalidOperationException(noDbConnStrMessage);
-    }
-    options.UseSqlite(connStr);
+    options.UseSqlite(abarConnStr);
 })
 .AddSingleton<IVoiceService, VoiceService>();
 
 IHost host = builder.Build()
     .AddModules(typeof(Program).Assembly);
+
+Console.WriteLine("Using DB at: " + Path.GetFullPath("./abar_bot.db"));
 
 await host.RunAsync();

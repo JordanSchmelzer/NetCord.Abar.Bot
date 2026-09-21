@@ -17,9 +17,9 @@ namespace NetCord.Abar.Bot.Migrations
                 {
                     Id = table.Column<int>(type: "INTEGER", nullable: false)
                         .Annotation("Sqlite:Autoincrement", true),
-                    Name = table.Column<string>(type: "TEXT", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    LastModifiedAt = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    name = table.Column<string>(type: "TEXT", nullable: false),
+                    created_at = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    last_modified_at = table.Column<DateTime>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {

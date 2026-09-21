@@ -16,7 +16,7 @@ namespace NetCord.Abar.Bot.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 
-            modelBuilder.Entity("NetCord.Abar.Bot.Database.Models.Playlist", b =>
+            modelBuilder.Entity("NetCord.Abar.Bot.Models.Playlist", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -36,7 +36,7 @@ namespace NetCord.Abar.Bot.Migrations
                     b.ToTable("Playlists", (string)null);
                 });
 
-            modelBuilder.Entity("NetCord.Abar.Bot.Database.Models.Sound", b =>
+            modelBuilder.Entity("NetCord.Abar.Bot.Models.Sound", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -59,30 +59,33 @@ namespace NetCord.Abar.Bot.Migrations
                     b.ToTable("Sounds", (string)null);
                 });
 
-            modelBuilder.Entity("NetCord.Abar.Bot.Database.Models.User", b =>
+            modelBuilder.Entity("NetCord.Abar.Bot.Models.User", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
 
                     b.Property<DateTime>("LastModifiedAt")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_modified_at");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
 
                     b.HasKey("Id");
 
                     b.ToTable("Users", (string)null);
                 });
 
-            modelBuilder.Entity("NetCord.Abar.Bot.Database.Models.Playlist", b =>
+            modelBuilder.Entity("NetCord.Abar.Bot.Models.Playlist", b =>
                 {
-                    b.HasOne("NetCord.Abar.Bot.Database.Models.User", "User")
+                    b.HasOne("NetCord.Abar.Bot.Models.User", "User")
                         .WithMany("Playlists")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -91,9 +94,9 @@ namespace NetCord.Abar.Bot.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("NetCord.Abar.Bot.Database.Models.Sound", b =>
+            modelBuilder.Entity("NetCord.Abar.Bot.Models.Sound", b =>
                 {
-                    b.HasOne("NetCord.Abar.Bot.Database.Models.Playlist", "Playlist")
+                    b.HasOne("NetCord.Abar.Bot.Models.Playlist", "Playlist")
                         .WithMany("Sounds")
                         .HasForeignKey("PlaylistId")
                         .OnDelete(DeleteBehavior.SetNull);
@@ -101,12 +104,12 @@ namespace NetCord.Abar.Bot.Migrations
                     b.Navigation("Playlist");
                 });
 
-            modelBuilder.Entity("NetCord.Abar.Bot.Database.Models.Playlist", b =>
+            modelBuilder.Entity("NetCord.Abar.Bot.Models.Playlist", b =>
                 {
                     b.Navigation("Sounds");
                 });
 
-            modelBuilder.Entity("NetCord.Abar.Bot.Database.Models.User", b =>
+            modelBuilder.Entity("NetCord.Abar.Bot.Models.User", b =>
                 {
                     b.Navigation("Playlists");
                 });

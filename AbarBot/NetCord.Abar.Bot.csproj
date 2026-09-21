@@ -9,15 +9,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="abar_bot.db" />
     <None Remove="appsettings.json" />
-    <None Remove="Database\abar_bot.db" />
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="appsettings.json">
+    <Content Include="abar_bot.db">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="Database\abar_bot.db">
+    <Content Include="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
