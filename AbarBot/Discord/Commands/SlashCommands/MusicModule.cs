@@ -14,7 +14,7 @@ using System.Collections.Immutable;
 using Microsoft.EntityFrameworkCore;
 
 
-namespace NetCord.Abar.Bot.SlashCommands;
+namespace NetCord.Abar.Bot.Discord.Commands.SlashCommands;
 
 
 public class MusicModule: ApplicationCommandModule<ApplicationCommandContext>
@@ -52,7 +52,7 @@ public class MusicModule: ApplicationCommandModule<ApplicationCommandContext>
             return;
         }
 
-        await _db.Users.AddAsync(new Models.User
+        await _db.Users.AddAsync(new Definitions.Models.User
         {
             Id = userId,
             Name = discordUserName,

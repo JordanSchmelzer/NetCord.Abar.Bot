@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
 
-namespace NetCord.Abar.Bot.Models;
+namespace NetCord.Abar.Bot.Definitions.Models;
 
 public class Playlist
 {

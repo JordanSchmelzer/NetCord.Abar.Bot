@@ -118,6 +118,7 @@ builder.Services.AddDiscordGateway(options =>
 .AddSingleton<ITrackSearchService>(sp => new TrackSearchService(
     soundRoot: @"C:/Users/jorda/source/repos/NetCord.Abar.Bot/AbarBot/Sounds"
 ))
+.AddSingleton<ResponseService>()
 .AddApplicationCommands()
 .AddDbContext<AbarBotDbContext>(options => 
 {

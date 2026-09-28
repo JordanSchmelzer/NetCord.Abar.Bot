@@ -1,5 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using NetCord.Abar.Bot.Models;
+using NetCord.Abar.Bot.Definitions.Models;
 
 public class AbarBotDbContext : DbContext
 {

@@ -2,7 +2,7 @@
 using NetCord.Services.ApplicationCommands;
 
 
-namespace NetCord.Abar.Bot.SlashCommands;
+namespace NetCord.Abar.Bot.Discord.Commands.SlashCommands;
 
 
 public class HelpModule: ApplicationCommandModule<ApplicationCommandContext>

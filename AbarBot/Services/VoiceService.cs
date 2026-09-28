@@ -1,7 +1,7 @@
 ﻿using Lavalink4NET;
 using Lavalink4NET.Players;
 using Lavalink4NET.Players.Queued;
-using NetCord.Abar.Bot.Models;
+using NetCord.Abar.Bot.Definitions.Models;
 using NetCord.Abar.Bot.Services.Interfaces;
 using NetCord.Gateway.Voice;
 using NetCord.Logging;

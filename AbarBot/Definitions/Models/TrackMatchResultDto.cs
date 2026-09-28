@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace NetCord.Abar.Bot.Models
+namespace NetCord.Abar.Bot.Definitions.Models
 {
     public class TrackMatchResultDto
     {

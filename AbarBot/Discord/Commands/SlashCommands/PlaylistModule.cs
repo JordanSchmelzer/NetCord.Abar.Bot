@@ -1,65 +1,30 @@
 ﻿using Microsoft.EntityFrameworkCore;
-
-using NetCord.Abar.Bot.Models;
-
+using Microsoft.Extensions.Logging;
+using NetCord.Abar.Bot.Definitions.Models;
+using NetCord.Abar.Bot.Services;
+using NetCord.Abar.Bot.Tools;
+using NetCord.Abar.Bot.Tools.Factories;
 using NetCord.Rest;
 using NetCord.Services.ApplicationCommands;
-using NetCord.Services.ComponentInteractions;
 
 
-namespace NetCord.Abar.Bot.SlashCommands;
+namespace NetCord.Abar.Bot.Discord.Commands.SlashCommands;
 
 
-public class PlaylistModalButtons: ComponentInteractionModule<StringMenuInteractionContext>
+public class PlaylistModule(
+    AbarBotDbContext db,
+    ResponseService responses,
+    ILogger<PlaylistModule> logger
+    ) : ApplicationCommandModule<ApplicationCommandContext>
 {
-    private readonly AbarBotDbContext _db;
-    public PlaylistModalButtons(AbarBotDbContext db)
+    private async Task EnsureUserAsync(ApplicationCommandContext ctx)
     {
-        _db = db;
-    }
+        // Maybe put this in a validation service
 
-    [ComponentInteraction("button")]
-    public string Button() => "I was clicked";
+        int userId = (int)Context.Interaction.User.Id;
+        string discordUserName = Context.Interaction.User.Username;
 
-
-    [ComponentInteraction("delete_playlist_menu")]
-    public async Task<string> HandleDeletePlaylistMenuAsync(string selectedValue)
-    {
-        int playlistId = int.Parse(selectedValue);
-        var userId = (long)Context.User.Id;
-
-        var playlist = await _db.Playlists
-            .FirstOrDefaultAsync(p => p.Id == playlistId && p.UserId == userId);
-
-        if (playlist == null)
-            return "Playlist not found";
-
-        _db.Playlists.Remove(playlist);
-        await _db.SaveChangesAsync();
-
-        return "Playlist deleted";
-    }
-}
-
-
-public class PlaylistModule : ApplicationCommandModule<ApplicationCommandContext>
-{
-    private readonly AbarBotDbContext _db;
-
-    public PlaylistModule(AbarBotDbContext db)
-    {
-        _db = db;
-    }
-
-
-    private async Task EnsureUserAsync(ulong discordUserId, string discordUserName)
-    {
-        // NOTE: Could use a middleware pattern instead,
-        // but that would mean creating a custom module.
-        // This is a low effort way to get the same effect.
-        int userId = (int)discordUserId;
-
-        Models.User? existingUser = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId);
+        Definitions.Models.User? existingUser = await db.Users.FirstOrDefaultAsync(u => u.Id == userId);
 
         // If user exists update them
         if (existingUser != null)
@@ -68,13 +33,13 @@ public class PlaylistModule : ApplicationCommandModule<ApplicationCommandContext
             existingUser.Name = discordUserName;
             if (existingUser.Name != discordUserName)
             {
-                await _db.SaveChangesAsync();
+                await db.SaveChangesAsync();
                 return;
             }
         }
         else
         {
-            await _db.Users.AddAsync(new Models.User
+            await db.Users.AddAsync(new Definitions.Models.User
             {
                 Id = userId,
                 Name = discordUserName,
@@ -83,24 +48,49 @@ public class PlaylistModule : ApplicationCommandModule<ApplicationCommandContext
             });
         }
 
-        await _db.SaveChangesAsync();
+        await db.SaveChangesAsync();
+    }
+
+
+    [SlashCommand("playlist", "Manage your playlists")]
+    public async Task PlaylistRoot()
+    {
+        var opts = EnumTools.CreateSelectOptions<PlaylistActions>();
+
+        var menu = new StringMenuProperties(
+                customId: "manage_playlists",
+                options: opts);
+
+        await RespondAsync(InteractionCallback.Message(new()
+        {
+            Components = [menu],
+            Flags = MessageFlags.Ephemeral
+        }));
     }
 
 
     [SlashCommand("playlistadd", "create a new private playlist")]
-    public async Task AddPlaylistAsync(string? name = null)
+    public async Task AddPlaylistAsync(
+        [SlashCommandParameter(
+            Name = "name",
+            Description = "Name of the playlist to add. If none, open a form."
+        )]
+        string? name = null)
     {
-        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
-        await EnsureUserAsync(Context.Interaction.User.Id, Context.Interaction.User.Username);
+        //await responses.DeferAsync(Context, true);
+        await EnsureUserAsync(Context);
 
-        // FEAT: Make default user playlist config driven
         if (string.IsNullOrWhiteSpace(name))
-            name = "My Playlist";
+        {
+            // This works if I dont defer the response
+            await RespondAsync(InteractionCallback.Modal(ModalFactory.CreateActionSelectModal()));
+            return;
+        }
 
+        // If the user specified a playlist name then try to add it
         var userId = (int)Context.Interaction.User.Id;
-        var existingPlaylists = _db.Playlists.Where(p => p.UserId == userId);
+        var existingPlaylists = db.Playlists.Where(p => p.UserId == userId);
 
-        // FEAT: Make config driven for the max number of playlists a user can have
         if (existingPlaylists.Count() >= 5) 
         {
             var embed = new EmbedProperties
@@ -119,6 +109,7 @@ public class PlaylistModule : ApplicationCommandModule<ApplicationCommandContext
                     })
                     .ToArray()
             };
+
             await Context.Interaction.SendFollowupMessageAsync(new()
             {
                 Embeds = [embed],
@@ -126,14 +117,13 @@ public class PlaylistModule : ApplicationCommandModule<ApplicationCommandContext
             });
             return;
         }
-
-        // Create a new playlist and save it to the database
-        await _db.Playlists.AddAsync(new Playlist
+        
+        await db.Playlists.AddAsync(new Playlist
         {
             UserId = userId,
             Name = name
         });
-        await _db.SaveChangesAsync();
+        await db.SaveChangesAsync();
 
         await Context.Interaction.SendFollowupMessageAsync(new()
         {
@@ -147,12 +137,12 @@ public class PlaylistModule : ApplicationCommandModule<ApplicationCommandContext
     {
         // Defer the response to give more time for processing
         await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
-        await EnsureUserAsync(Context.Interaction.User.Id, Context.Interaction.User.Username);
+        await EnsureUserAsync(Context);
 
         var userId = (int)Context.Interaction.User.Id;
 
         // Get the user's playlists from the database
-        var playlists = _db.Playlists.Where(t => t.UserId == userId);
+        var playlists = db.Playlists.Where(t => t.UserId == userId);
 
 
         // Check if the user actually has any playlists to choose from
@@ -174,8 +164,8 @@ public class PlaylistModule : ApplicationCommandModule<ApplicationCommandContext
 
             if (playlistToDelete != null)
             {
-                _db.Playlists.Remove(playlistToDelete);
-                await _db.SaveChangesAsync();
+                db.Playlists.Remove(playlistToDelete);
+                await db.SaveChangesAsync();
                 await Context.Interaction.SendFollowupMessageAsync(new()
                 {
                     Content = "Deleted playlist.",
@@ -238,11 +228,11 @@ public class PlaylistModule : ApplicationCommandModule<ApplicationCommandContext
         // FEAT: This could be a form that lets the user change multiple meta aspects of the playlist.
         // For now, just change the name.
         await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
-        await EnsureUserAsync(Context.Interaction.User.Id, Context.Interaction.User.Username);
+        await EnsureUserAsync(Context);
 
         var userId = (int)Context.Interaction.User.Id;
 
-        var playlist = _db.Playlists.FirstOrDefault(
+        var playlist = db.Playlists.FirstOrDefault(
             p => p.UserId == userId && p.Name == originalName);
 
         if (playlist == null)
@@ -255,7 +245,7 @@ public class PlaylistModule : ApplicationCommandModule<ApplicationCommandContext
         }
 
         playlist.Name = newName;
-        await _db.SaveChangesAsync();
+        await db.SaveChangesAsync();
 
         await Context.Interaction.SendFollowupMessageAsync(new()
         {
@@ -271,11 +261,11 @@ public class PlaylistModule : ApplicationCommandModule<ApplicationCommandContext
         // FEAT: What if this had some kind of memory of the last playlist the user was working with,
         // and then it would just add to that playlist by default?
         await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
-        await EnsureUserAsync(Context.Interaction.User.Id, Context.Interaction.User.Username);
+        await EnsureUserAsync(Context);
 
         var userId = (int)Context.Interaction.User.Id;
 
-        var playlist = _db.Playlists.FirstOrDefault(
+        var playlist = db.Playlists.FirstOrDefault(
             p => p.UserId == userId && p.Name == playlistName);
 
         if (playlist == null)
@@ -287,13 +277,13 @@ public class PlaylistModule : ApplicationCommandModule<ApplicationCommandContext
             return;
         }
 
-        await _db.Sounds.AddAsync(new()
+        await db.Sounds.AddAsync(new()
         {
             PlaylistId = playlist.Id,
             FileName = trackQuery
         });
 
-        await _db.SaveChangesAsync();
+        await db.SaveChangesAsync();
 
         await Context.Interaction.SendFollowupMessageAsync(new()
         {
@@ -307,11 +297,11 @@ public class PlaylistModule : ApplicationCommandModule<ApplicationCommandContext
     public async Task RemoveTrackAsync(string playlistName, string trackQuery)
     {
         await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
-        await EnsureUserAsync(Context.Interaction.User.Id, Context.Interaction.User.Username);
+        await EnsureUserAsync(Context);
 
         var userId = (int)Context.Interaction.User.Id;
 
-        var playlist = _db.Playlists.FirstOrDefault(
+        var playlist = db.Playlists.FirstOrDefault(
             p => p.UserId == userId && p.Name == playlistName);
 
         if (playlist == null)
@@ -323,7 +313,7 @@ public class PlaylistModule : ApplicationCommandModule<ApplicationCommandContext
             return;
         }
 
-        var track = _db.Sounds.FirstOrDefault(
+        var track = db.Sounds.FirstOrDefault(
             t => t.PlaylistId == playlist.Id && t.FileName == trackQuery);
 
         if (track == null)
@@ -335,8 +325,8 @@ public class PlaylistModule : ApplicationCommandModule<ApplicationCommandContext
             return;
         }
 
-        _db.Sounds.Remove(track);
-        await _db.SaveChangesAsync();
+        db.Sounds.Remove(track);
+        await db.SaveChangesAsync();
 
         await Context.Interaction.SendFollowupMessageAsync(new()
         {

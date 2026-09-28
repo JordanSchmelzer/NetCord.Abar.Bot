@@ -1,6 +1,6 @@
 ﻿using NetCord.Gateway.Voice;
 
-namespace NetCord.Abar.Bot.Models;
+namespace NetCord.Abar.Bot.Definitions.Models;
 
 
 public enum VoiceJobType
