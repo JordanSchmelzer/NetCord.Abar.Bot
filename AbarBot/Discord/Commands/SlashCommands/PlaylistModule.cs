@@ -1,143 +1,100 @@
-﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
-using NetCord.Abar.Bot.Definitions.Models;
-using NetCord.Abar.Bot.Services;
-using NetCord.Abar.Bot.Tools;
-using NetCord.Abar.Bot.Tools.Factories;
+﻿using Microsoft.Extensions.Logging;
+
 using NetCord.Rest;
 using NetCord.Services.ApplicationCommands;
+
+using NetCord.Abar.Bot.Definitions.Models;
+using NetCord.Abar.Bot.Services;
+using NetCord.Abar.Bot.Tools.Factories;
+using Microsoft.EntityFrameworkCore;
 
 
 namespace NetCord.Abar.Bot.Discord.Commands.SlashCommands;
 
 
+[SlashCommand("playlist", "Playlist Commands")]
 public class PlaylistModule(
     AbarBotDbContext db,
-    ResponseService responses,
+    ValidationService validationService,
+    ResponseService responseService,
     ILogger<PlaylistModule> logger
     ) : ApplicationCommandModule<ApplicationCommandContext>
 {
-    private async Task EnsureUserAsync(ApplicationCommandContext ctx)
+    public static readonly int PlaylistUserLimt = 10;
+
+
+    [SubSlashCommand("add", "add a new playlist")]
+    public async Task AddPlaylistAsync(
+        [SlashCommandParameter(Name = "name", Description = "Name of the playlist to add. If none, open a form.")]
+        string? name = null)
     {
-        // Maybe put this in a validation service
-
-        int userId = (int)Context.Interaction.User.Id;
-        string discordUserName = Context.Interaction.User.Username;
-
-        Definitions.Models.User? existingUser = await db.Users.FirstOrDefaultAsync(u => u.Id == userId);
-
-        // If user exists update them
-        if (existingUser != null)
+        try
         {
-            // Update user data
-            existingUser.Name = discordUserName;
-            if (existingUser.Name != discordUserName)
+            await validationService.EnsureUserAsync(Context.User.Id, Context.User.Username);
+
+            if ( string.IsNullOrWhiteSpace(name) )
             {
-                await db.SaveChangesAsync();
+                // This works if I dont defer the response
+                await RespondAsync(InteractionCallback.Modal(ModalFactory.CreateActionSelectModal()));
                 return;
             }
-        }
-        else
-        {
-            await db.Users.AddAsync(new Definitions.Models.User
+
+            var userId = ( int )Context.Interaction.User.Id;
+            var existingPlaylists = await db.Playlists
+                .Where(p => p.UserId == userId)
+                .ToListAsync();
+
+            if ( existingPlaylists.Count >= PlaylistUserLimt )
             {
-                Id = userId,
-                Name = discordUserName,
-                CreatedAt = DateTime.UtcNow,
-                LastModifiedAt = DateTime.UtcNow
+                var playlistLimitMsg = "You currently have **5 playlists**, which is the maximum allowed. Here are your existing playlists:";
+                var embed = EmbedFactory.CreateResponseEmbed(playlistLimitMsg, ResponseType.Error)
+                    .AddFields(existingPlaylists
+                        .Select(p => new EmbedFieldProperties()
+                        {
+                            Name = p.Name,
+                            Value = " ",
+                            Inline = false
+                        })
+                        .ToArray());
+                await responseService.SendEmbedResponse(Context, embed);
+            }
+
+            await db.Playlists.AddAsync(new Playlist
+            {
+                UserId = userId,
+                Name = name
             });
+
+            await db.SaveChangesAsync();
+
+            await responseService.SendEmbedResponse(
+                Context,
+                EmbedFactory.CreateResponseEmbed($"Playlist '{name}' created successfully!", 
+                ResponseType.Success));
         }
-
-        await db.SaveChangesAsync();
-    }
-
-
-    [SlashCommand("playlist", "Manage your playlists")]
-    public async Task PlaylistRoot()
-    {
-        var opts = EnumTools.CreateSelectOptions<PlaylistActions>();
-
-        var menu = new StringMenuProperties(
-                customId: "manage_playlists",
-                options: opts);
-
-        await RespondAsync(InteractionCallback.Message(new()
+        catch ( Exception ex )
         {
-            Components = [menu],
-            Flags = MessageFlags.Ephemeral
-        }));
+            logger.LogError(ex.Message);
+
+            await responseService.SendEmbedResponse(
+                Context,
+                EmbedFactory.CreateResponseEmbed("Sorry! There was an error adding you playlist.", 
+                ResponseType.Error));
+        }
     }
 
 
-    [SlashCommand("playlistadd", "create a new private playlist")]
-    public async Task AddPlaylistAsync(
+    [SubSlashCommand("remove", "delete a playlist")]
+    public async Task RemovePlaylistAsync(
         [SlashCommandParameter(
             Name = "name",
             Description = "Name of the playlist to add. If none, open a form."
         )]
         string? name = null)
     {
-        //await responses.DeferAsync(Context, true);
-        await EnsureUserAsync(Context);
-
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            // This works if I dont defer the response
-            await RespondAsync(InteractionCallback.Modal(ModalFactory.CreateActionSelectModal()));
-            return;
-        }
-
-        // If the user specified a playlist name then try to add it
-        var userId = (int)Context.Interaction.User.Id;
-        var existingPlaylists = db.Playlists.Where(p => p.UserId == userId);
-
-        if (existingPlaylists.Count() >= 5) 
-        {
-            var embed = new EmbedProperties
-            {
-                Title = "Playlist Limit Reached",
-                Description = "You currently have **5 playlists**, " +
-                              "which is the maximum allowed.\n\n" +
-                              "Here are your existing playlists:",
-                Color = new Color(255, 80, 80),
-                Fields = existingPlaylists
-                    .Select(p => new EmbedFieldProperties()
-                    {
-                        Name = p.Name,
-                        Value = " ", 
-                        Inline = false
-                    })
-                    .ToArray()
-            };
-
-            await Context.Interaction.SendFollowupMessageAsync(new()
-            {
-                Embeds = [embed],
-                Flags = MessageFlags.Ephemeral
-            });
-            return;
-        }
-        
-        await db.Playlists.AddAsync(new Playlist
-        {
-            UserId = userId,
-            Name = name
-        });
-        await db.SaveChangesAsync();
-
-        await Context.Interaction.SendFollowupMessageAsync(new()
-        {
-            Content = $"Playlist '{name}' created successfully!"
-        });
-    }
-
-
-    [SlashCommand("playlistdelete", "delete a playlist")]
-    public async Task DeletePlaylistAsync(string? name = null)
-    {
         // Defer the response to give more time for processing
         await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
-        await EnsureUserAsync(Context);
+        //await EnsureUserAsync(Context);
 
         var userId = (int)Context.Interaction.User.Id;
 
@@ -191,44 +148,44 @@ public class PlaylistModule(
                     value: a.Name)
             ).ToArray();
 
-            // Create a button component
-            var button = new ButtonProperties(
-                customId: "delete_playlist_btn:{playlistId}",
-                label: "Click Me!",
-                style: ButtonStyle.Primary
-            );
+        // Create a button component
+        var button = new ButtonProperties(
+            customId: "delete_playlist_btn:{playlistId}",
+            label: "Click Me!",
+            style: ButtonStyle.Primary
+        );
 
-            var actionRow = new ActionRowProperties
+        var actionRow = new ActionRowProperties
             {
                 button
             };
 
-            var menu = new StringMenuProperties("delete_playlist_menu")
-            {
-                Options = [
-                    new StringMenuSelectOptionProperties("Playlist 1", "1"),
+        var menu = new StringMenuProperties("delete_playlist_menu")
+        {
+            Options = [
+                new StringMenuSelectOptionProperties("Playlist 1", "1"),
                     new StringMenuSelectOptionProperties("Playlist 2", "2")
-                ]
-            };
+            ]
+        };
 
-            // Send the button back to the user
-            await Context.Interaction.SendFollowupMessageAsync(new()
-            {
-                Content = "Click the button below:",
-                Components = [actionRow, menu],
-                Flags = MessageFlags.Ephemeral
-            });
-            return;
+        // Send the button back to the user
+        await Context.Interaction.SendFollowupMessageAsync(new()
+        {
+            Content = "Click the button below:",
+            Components = [actionRow, menu],
+            Flags = MessageFlags.Ephemeral
+        });
+        return;
     }
 
 
-    [SlashCommand("playlistrename", "change the name of a playlist")]
-    public async Task ModifyPlaylistAsync(string newName, string? originalName = null)
+    [SubSlashCommand("rename", "rename a playlist")]
+    public async Task RenamePlaylistAsync(string newName, string? originalName = null)
     {
         // FEAT: This could be a form that lets the user change multiple meta aspects of the playlist.
         // For now, just change the name.
         await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
-        await EnsureUserAsync(Context);
+        await validationService.EnsureUserAsync(Context.User.Id, Context.User.Username);
 
         var userId = (int)Context.Interaction.User.Id;
 
@@ -254,83 +211,86 @@ public class PlaylistModule(
     }
 
 
-    // TODO: Actually implement sounds
-    [SlashCommand("trackadd", "add a track to a playlist")]
-    public async Task AddTrackAsync(string playlistName, string trackQuery)
+    [SubSlashCommand("track", "track actions")]
+    public class TrackActionMenu (
+        AbarBotDbContext db): ApplicationCommandModule<ApplicationCommandContext>
     {
-        // FEAT: What if this had some kind of memory of the last playlist the user was working with,
-        // and then it would just add to that playlist by default?
-        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
-        await EnsureUserAsync(Context);
-
-        var userId = (int)Context.Interaction.User.Id;
-
-        var playlist = db.Playlists.FirstOrDefault(
-            p => p.UserId == userId && p.Name == playlistName);
-
-        if (playlist == null)
+        [SubSlashCommand("add", "add a track")]
+        public async Task AddTrackAsync(string playlistName, string trackQuery)
         {
+            // FEAT: What if this had some kind of memory of the last playlist the user was working with,
+            // and then it would just add to that playlist by default?
+            await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
+            //await EnsureUserAsync(Context);
+
+            var userId = (int)Context.Interaction.User.Id;
+
+            var playlist = db.Playlists.FirstOrDefault(
+                p => p.UserId == userId && p.Name == playlistName);
+
+            if (playlist == null)
+            {
+                await Context.Interaction.SendFollowupMessageAsync(new()
+                {
+                    Content = $"Playlist '{playlistName}' not found."
+                });
+                return;
+            }
+
+            await db.Sounds.AddAsync(new()
+            {
+                PlaylistId = playlist.Id,
+                FileName = trackQuery
+            });
+
+            await db.SaveChangesAsync();
+
             await Context.Interaction.SendFollowupMessageAsync(new()
             {
-                Content = $"Playlist '{playlistName}' not found."
+                Content = $"Added track to '{playlistName}': {trackQuery}"
             });
-            return;
         }
 
-        await db.Sounds.AddAsync(new()
+
+        [SubSlashCommand("delete", "delete a track")]
+        public async Task RemoveTrackAsync(string playlistName, string trackQuery)
         {
-            PlaylistId = playlist.Id,
-            FileName = trackQuery
-        });
+            await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
+            //await EnsureUserAsync(Context);
 
-        await db.SaveChangesAsync();
+            var userId = (int)Context.Interaction.User.Id;
 
-        await Context.Interaction.SendFollowupMessageAsync(new()
-        {
-            Content = $"Added track to '{playlistName}': {trackQuery}"
-        });
-    }
+            var playlist = db.Playlists.FirstOrDefault(
+                p => p.UserId == userId && p.Name == playlistName);
 
+            if (playlist == null)
+            {
+                await Context.Interaction.SendFollowupMessageAsync(new()
+                {
+                    Content = $"Playlist '{playlistName}' not found."
+                });
+                return;
+            }
 
-    // TODO: Actually implement sounds
-    [SlashCommand("trackremove", "remove a track from a playlist")]
-    public async Task RemoveTrackAsync(string playlistName, string trackQuery)
-    {
-        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage(MessageFlags.Ephemeral));
-        await EnsureUserAsync(Context);
+            var track = db.Sounds.FirstOrDefault(
+                t => t.PlaylistId == playlist.Id && t.FileName == trackQuery);
 
-        var userId = (int)Context.Interaction.User.Id;
+            if (track == null)
+            {
+                await Context.Interaction.SendFollowupMessageAsync(new()
+                {
+                    Content = $"Track not found in '{playlistName}'."
+                });
+                return;
+            }
 
-        var playlist = db.Playlists.FirstOrDefault(
-            p => p.UserId == userId && p.Name == playlistName);
+            db.Sounds.Remove(track);
+            await db.SaveChangesAsync();
 
-        if (playlist == null)
-        {
             await Context.Interaction.SendFollowupMessageAsync(new()
             {
-                Content = $"Playlist '{playlistName}' not found."
+                Content = $"Removed track from '{playlistName}'."
             });
-            return;
         }
-
-        var track = db.Sounds.FirstOrDefault(
-            t => t.PlaylistId == playlist.Id && t.FileName == trackQuery);
-
-        if (track == null)
-        {
-            await Context.Interaction.SendFollowupMessageAsync(new()
-            {
-                Content = $"Track not found in '{playlistName}'."
-            });
-            return;
-        }
-
-        db.Sounds.Remove(track);
-        await db.SaveChangesAsync();
-
-        await Context.Interaction.SendFollowupMessageAsync(new()
-        {
-            Content = $"Removed track from '{playlistName}'."
-        });
     }
 }

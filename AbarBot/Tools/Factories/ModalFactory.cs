@@ -1,7 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 
 using NetCord.Rest;
-using NetCord.Services.ApplicationCommands;
 
 using NetCord.Abar.Bot.Definitions.Models;
 

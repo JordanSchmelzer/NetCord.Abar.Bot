@@ -119,6 +119,7 @@ builder.Services.AddDiscordGateway(options =>
     soundRoot: @"C:/Users/jorda/source/repos/NetCord.Abar.Bot/AbarBot/Sounds"
 ))
 .AddSingleton<ResponseService>()
+.AddSingleton<ValidationService>()
 .AddApplicationCommands()
 .AddDbContext<AbarBotDbContext>(options => 
 {
