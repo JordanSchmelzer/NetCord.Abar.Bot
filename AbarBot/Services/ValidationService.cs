@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 
 using NetCord.Abar.Bot.Definitions.Models;
+using NetCord.Services.ApplicationCommands;
 
 
 namespace NetCord.Abar.Bot.Services;
@@ -8,8 +9,11 @@ namespace NetCord.Abar.Bot.Services;
 public class ValidationService(
     AbarBotDbContext db) 
 {
-    public async Task EnsureUserAsync(ulong userId, string discordUserName)
+    public async Task EnsureUserAsync(ApplicationCommandContext Context)
     {
+        ulong userId = Context.User.Id;
+        string discordUserName = Context.User.Username;
+
         // Maybe put this in a validation service
         Definitions.Models.User? existingUser = await db.Users
             .Where(u => u.Id == (int)userId)
